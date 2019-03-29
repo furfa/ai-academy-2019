@@ -7,9 +7,6 @@ sys.path.append("..")
 import os
 pd.set_option("max_columns", 10000)
 
-%pylab inline
-import seaborn as sns
-
 import warnings
 warnings.simplefilter("ignore")
 
@@ -27,10 +24,10 @@ def get_data(data_json_series, shifts, func_to_aggregate):
 
 
     data_series = {
-        f"{it}->{s}_{func.__name__}":list() for func in func_to_aggregate 
+        f"{it}->{s}_{func.__name__}":list() for func in func_to_aggregate
                             for it in ("radiant", "dire", "time", "player")
                             for s in shifts
-        
+
     }
     data_series["id"] = list()
 
@@ -40,16 +37,16 @@ def get_data(data_json_series, shifts, func_to_aggregate):
         ser = json.loads(
             data_json_series[ind]
         )
-        
+
         data_series["id"].append(ind)
-        
+
         sootv = {
             "radiant" : np.array(ser["radiant_gold"]),
             "dire" : np.array(ser["dire_gold"]),
             "time" : np.array(ser["time"]),
             "player" : np.array(ser["player_gold"]),
         }
-        
+
         for it in ("radiant", "dire", "time", "player"):
             for func in func_to_aggregate:
                 for s in shifts:
