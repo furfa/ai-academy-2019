@@ -43,10 +43,28 @@ def parse_row(row):
     return {**zeros_dict, **first_buy_time}, {**zeros_dict, **count_items}
 
 def parse(log):
-    df_fbt = pd.DataFrame(columns=list(items.index))
-    df_ci = pd.DataFrame(columns=list(items.index))
+    df_fbt = list()
+    df_ci = list()
+    pd.DataFrame(columns=list(items.index))
     for row, i in tqdm( zip(log, log.index), total=log.shape[0] ):
-        df_fbt.loc[i], df_ci.loc[i] = parse_row(row)
+        parsed_row_fbt, parsed_row_ci = parse_row(row)
+
+        parsed_row_fbt_list = list()
+        parsed_row_ci_list = list()
+
+        for key in zeros_dict.keys():
+            parsed_row_fbt_list.append(parsed_row_fbt[key])
+            parsed_row_ci_list.append(parsed_row_ci[key]) 
+        
+        df_fbt.append(parsed_row_fbt_list)
+        df_ci.append(parsed_row_ci_list)
+
+    df_fbt = pd.DataFrame(df_fbt, columns=zeros_dict.keys() )
+    df_ci = pd.DataFrame(df_ci, columns=zeros_dict.keys() )
+
+    df_fbt.index = log.index
+    df_ci.index = log.index
+
     return pd.concat(
                 (
                     df_fbt.add_prefix("first_buy_time_"),

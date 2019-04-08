@@ -14,6 +14,10 @@ from tqdm import tqdm
 import copy
 
 from Scripts.saving import submit
+import featuretools as ft
+
+import catboost as cb
+from sklearn.model_selection import cross_val_score
 
 def reduce_mem_usage(df, skip_cols_pattern='SK_ID_'):
     """
@@ -119,3 +123,124 @@ def linreg_trend(Y):
     trend_a = (Sxy * N - Sy * Sx)/det
     trend_b = (Sxx * Sy - Sx * Sxy)/det
     return trend_a
+
+def generate_features(data, var_types, 
+                      trans_primitives=["multiply",'divide', "diff"], N_FEATURES=1000, 
+                      index_col_name="id"):
+    data = data.copy()
+    
+    print("-"*15)
+
+    start_columns = data.columns
+    
+    data = data.reset_index()
+    data[index_col_name] = data[index_col_name].astype(np.int64)
+    
+    N_FEATURES += data.shape[1]
+    
+    es = ft.EntitySet(id='players')
+    
+    main_entity_id = 'train_players'
+
+    # Entities with a unique index
+    es = es.entity_from_dataframe(
+        entity_id=main_entity_id, 
+        dataframe=data, # dataframe object
+        index=index_col_name, # unique index
+        variable_types=var_types
+    )
+
+    print(es)
+    
+    # DFS with specified primitives
+    print("Start dfs")
+
+    features, feature_names = ft.dfs(
+        entityset=es, 
+        target_entity=main_entity_id,
+        trans_primitives = trans_primitives,
+        agg_primitives=[], 
+        max_depth=1, 
+        features_only=False,
+        verbose=True,
+        chunk_size=0.5,
+        max_features=N_FEATURES, # comment it later, computational burden reduction
+        n_jobs=-1,
+    )
+    return features.drop(start_columns, axis=1)
+
+def generate_for_train_test(train, shuffle, var_types, 
+                            trans_primitives=["multiply",'divide', "diff"],
+                            N_FEATURES=1000, test=None):
+
+    cols = train.columns.values
+
+    if shuffle:
+        np.random.shuffle(cols)
+        train = train[cols]
+        if test is not None:
+            test = test[ cols[:N_FEATURES] ]
+
+    train = train[ cols[:N_FEATURES] ]
+
+    if test is not None:
+        return (
+            generate_features(
+                train,
+                var_types = var_types,
+                trans_primitives=trans_primitives,
+                N_FEATURES=N_FEATURES,
+            ),
+            generate_features(
+                test,
+                var_types = var_types,
+                trans_primitives=trans_primitives,
+                N_FEATURES=N_FEATURES,
+            )
+        )
+
+    return  generate_features(
+                train,
+                var_types = var_types,
+                trans_primitives=trans_primitives,
+                N_FEATURES=N_FEATURES,
+            )
+
+def save_train_test(train, test, base_name, path):
+    train.to_csv(
+        os.path.join(path, f"train_{base_name}.csv")
+    )
+    print( os.path.join(path, f"train_{base_name}.csv") )
+    test.to_csv(
+        os.path.join(path, f"test_{base_name}.csv")
+    )
+    print( os.path.join(path, f"test_{base_name}.csv") )
+
+def get_most_importance(df, y_train, calc_score=True, n_inp=200, 
+                        model=cb.CatBoostClassifier(logging_level="Silent") ):
+    
+    model = model.fit(df, y_train)
+    print(len(df.columns))
+    print(len(model.feature_importances_))
+    imp = pd.DataFrame({
+        "name": df.columns,
+        "importance" : model.feature_importances_,
+    })
+    imp = imp.sort_values(by="importance", ascending=False)
+    
+    if calc_score:
+        score = cross_val_score(
+                model,
+                df[
+                    imp[:n_inp].name.values
+                ],
+                y_train,
+                scoring="accuracy",
+                cv = 4,
+                verbose=0,
+                n_jobs=-1
+        )
+        print("mean: ",np.mean(score), "std: ", np.std(score))
+        print(score)
+    
+    return imp[:n_inp].name.values
