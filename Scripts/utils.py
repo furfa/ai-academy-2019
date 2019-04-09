@@ -220,6 +220,7 @@ def get_most_importance(df, y_train, calc_score=True, n_inp=200,
                         model=cb.CatBoostClassifier(logging_level="Silent") ):
     
     model = model.fit(df, y_train)
+    print()
     print(len(df.columns))
     print(len(model.feature_importances_))
     imp = pd.DataFrame({
